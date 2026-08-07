@@ -1,0 +1,39 @@
+# 小蕾米桌宠 · Hana 插件
+
+把桌宠装进 HanaAgent：插件订阅 Hana 事件总线，把 Agent 会话状态归约为桌宠动画状态；
+桌宠本体（Tauri exe，见 `assets/`）由插件自动部署到 `%LOCALAPPDATA%\XiaolemiPet\` 并启动，
+通过本地 API `/api/pet-state` 每 1.5 秒轮询状态。
+
+## 安装
+
+1. 把本目录解压/复制到 `C:\Users\<用户名>\.hanako\plugins\remielle-xiaolemi\`
+2. 完全退出并重启 HanaAgent
+3. 桌宠自动部署并启动，同时设置开机自启
+
+要求：HanaAgent ≥ 0.159.0；桌宠本体需 WebView2 运行时（Win11 自带）。
+
+## 架构
+
+```
+Hana 事件总线 ──> index.js（事件归约）──> bus handler ──> routes/ui.js（HTTP /api/pet-state）
+                                                              ▲
+                            Tauri 桌宠本体（1.5s 轮询）────────┘
+```
+
+- 事件映射：工具执行 → 工作中；思考/回复 → 思考中；出错 → 翻车；
+  工具完成（2s 确认，10s 冷却）→ 庆祝；15s 无事件看门狗 → 回待机
+- 无 Hana 环境时桌宠纯待机，其余功能（拖拽/缩放/画画/右键/托盘）不受影响
+
+## 目录
+
+| 路径 | 说明 |
+|---|---|
+| `index.js` | 生命周期入口：事件订阅、状态归约、自动部署桌宠 |
+| `routes/ui.js` | `/api/pet-state` HTTP 接口 |
+| `assets/xiaolemi-pet.exe` | 桌宠本体（Tauri 构建，随插件分发） |
+| `source/` | 动画触发配置与版权声明 |
+
+## 版权
+
+素材为米哈游《绝区零》官方活动素材的非商业同人衍生，仅限个人学习与非商业展示。
+详见 `source/NOTICE.md`。

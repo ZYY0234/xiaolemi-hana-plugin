@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "petId": "xiaolemi",
+  "defaultState": "idle",
+  "description": "小蕾米的桌宠事件触发映射。原 jumping 行已替换为 smug 完成庆祝姿态；运行器应在事件发生时播放指定动作一次，然后恢复事件前状态或待机。",
+  "playback": {
+    "mode": "once",
+    "restoreState": "previous-or-idle",
+    "interruptLowerPriority": false,
+    "interruptHigherPriority": true
+  },
+  "states": {
+    "idle": {
+      "row": 0,
+      "label": "待机"
+    },
+    "waving": {
+      "row": 3,
+      "label": "挥手",
+      "durationMs": 700
+    },
+    "jumping": {
+      "row": 4,
+      "label": "完成庆祝（smug）",
+      "nativeState": "jumping",
+      "visualSource": "../../gif/smug.gif",
+      "durationMs": 840
+    }
+  },
+  "events": [
+    {
+      "event": "app_start",
+      "label": "启动桌宠",
+      "state": "waving",
+      "priority": 80,
+      "cooldownMs": 30000
+    },
+    {
+      "event": "pointer_enter",
+      "label": "鼠标移入小蕾米",
+      "state": "waving",
+      "priority": 80,
+      "cooldownMs": 10000
+    },
+    {
+      "event": "pet_click",
+      "label": "点击小蕾米",
+      "state": "waving",
+      "priority": 80,
+      "cooldownMs": 2500
+    },
+    {
+      "event": "task_complete",
+      "label": "任务完成，播放完成庆祝",
+      "state": "jumping",
+      "priority": 100,
+      "cooldownMs": 3000
+    },
+    {
+      "event": "important_notification",
+      "label": "收到重要通知，播放完成庆祝",
+      "state": "jumping",
+      "priority": 100,
+      "cooldownMs": 5000
+    },
+    {
+      "event": "double_click",
+      "label": "双击互动，播放完成庆祝",
+      "state": "jumping",
+      "priority": 100,
+      "cooldownMs": 3000
+    },
+    {
+      "event": "interaction_success",
+      "label": "互动成功，播放完成庆祝",
+      "state": "jumping",
+      "priority": 100,
+      "cooldownMs": 3000
+    }
+  ]
+}
