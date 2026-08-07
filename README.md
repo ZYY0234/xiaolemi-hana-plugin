@@ -6,11 +6,31 @@
 
 ## 安装
 
-1. 把本目录解压/复制到 `C:\Users\<用户名>\.hanako\plugins\remielle-xiaolemi\`
-2. 完全退出并重启 HanaAgent
-3. 桌宠自动部署并启动，同时设置开机自启
+### 方式一：下载安装包（推荐）
+
+从 [Releases](https://github.com/ZYY0234/xiaolemi-hana-plugin/releases) 下载
+`xiaolemi-hana-plugin-v0.1.0.zip`，解压得到 `remielle-xiaolemi` 文件夹，
+放到 `C:\Users\<用户名>\.hanako\plugins\`，完全退出并重启 HanaAgent 即可。
+
+### 方式二：clone 源码
+
+```bash
+git clone https://github.com/ZYY0234/xiaolemi-hana-plugin.git
+```
+
+把 `remielle-xiaolemi` 目录复制到 `C:\Users\<用户名>\.hanako\plugins\`，
+重启 HanaAgent。（仓库内 `assets/xiaolemi-pet.exe` 即桌宠本体，插件会自动部署）
+
+桌宠会在 HanaAgent 启动时自动部署到 `%LOCALAPPDATA%\XiaolemiPet\` 并设开机自启。
 
 要求：HanaAgent ≥ 0.159.0；桌宠本体需 WebView2 运行时（Win11 自带）。
+
+## Release
+
+v0.1.0 提供：
+
+- `xiaolemi-hana-plugin-v0.1.0.zip`：插件安装包（含桌宠本体，装进 Hana）
+- `xiaolemi-portable-v0.1.0.zip`：独立桌宠便携版（不依赖 Hana，解压即用）
 
 ## 架构
 
