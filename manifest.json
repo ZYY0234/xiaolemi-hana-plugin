@@ -2,7 +2,7 @@
   "manifestVersion": 1,
   "id": "remielle-xiaolemi",
   "name": "小蕾米桌宠",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "一只粉发白翼、抱着画板和画笔的 Q 版小天使桌宠。动画跟随 Agent 工作状态：思考中、等待确认、任务完成、失败。素材来自 Codex 桌宠社区项目 remielle-codex-pet（米哈游素材非商业同人衍生）。",
   "minAppVersion": "0.159.0",
   "trust": "full-access",
