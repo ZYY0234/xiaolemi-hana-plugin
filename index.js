@@ -37,7 +37,14 @@ function deployAndStartPet(ctx) {
     const src = fileURLToPath(new URL("./assets/" + PET_EXE, import.meta.url));
     const dest = join(PET_DIR, PET_EXE);
     mkdirSync(PET_DIR, { recursive: true });
-    const needCopy = !existsSync(dest) || statSync(src).size !== statSync(dest).size;
+    // 覆盖判断：目标不存在 / 大小不同 / 修改时间不同 都需更新。
+    // 只比大小会漏掉“构建后大小恰好不变”的更新（2026-08-11 踩坑：新旧 exe 同为 20240896 字节）
+    const srcStat = statSync(src);
+    let needCopy = true;
+    if (existsSync(dest)) {
+      const destStat = statSync(dest);
+      needCopy = srcStat.size !== destStat.size || srcStat.mtimeMs !== destStat.mtimeMs;
+    }
     deployLog("src=" + src + " needCopy=" + needCopy);
     if (needCopy) {
       copyFileSync(src, dest);
