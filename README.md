@@ -4,12 +4,14 @@
 桌宠本体（Tauri exe，见 `assets/`）由插件自动部署到 `%LOCALAPPDATA%\XiaolemiPet\` 并启动，
 通过本地 API `/api/pet-state` 每 1.5 秒轮询状态。
 
+当前版本 **v0.2.0**（全屏事件化 + 生命周期定案）。
+
 ## 安装
 
 ### 方式一：下载安装包（推荐）
 
 从 [Releases](https://github.com/ZYY0234/xiaolemi-hana-plugin/releases) 下载
-`xiaolemi-hana-plugin-v0.1.0.zip`，解压得到 `remielle-xiaolemi` 文件夹，
+`小蕾米桌宠插件-v0.2.0.zip`，解压得到 `remielle-xiaolemi` 文件夹，
 放到 `C:\Users\<用户名>\.hanako\plugins\`，完全退出并重启 HanaAgent 即可。
 
 ### 方式二：clone 源码
@@ -21,16 +23,18 @@ git clone https://github.com/ZYY0234/xiaolemi-hana-plugin.git
 把 `remielle-xiaolemi` 目录复制到 `C:\Users\<用户名>\.hanako\plugins\`，
 重启 HanaAgent。（仓库内 `assets/xiaolemi-pet.exe` 即桌宠本体，插件会自动部署）
 
-桌宠会在 HanaAgent 启动时自动部署到 `%LOCALAPPDATA%\XiaolemiPet\` 并设开机自启。
+**生命周期**：桌宠随 Hana 启动而启动、退出而退出（设计定案）。插件不再设开机自启。
 
 要求：HanaAgent ≥ 0.159.0；桌宠本体需 WebView2 运行时（Win11 自带）。
 
 ## Release
 
-v0.1.0 提供：
+v0.2.0 提供两个包，桌宠本体（exe）是同一份，差别只在有没有 Hana 这个“大脑”：
 
-- `xiaolemi-hana-plugin-v0.1.0.zip`：插件安装包（含桌宠本体，装进 Hana）
-- `xiaolemi-portable-v0.1.0.zip`：独立桌宠便携版（不依赖 Hana，解压即用）
+- `小蕾米桌宠插件-v0.2.0.zip`：**插件安装包**（含桌宠本体），装进 Hana，桌宠随 Hana 启动/退出，
+  并联动 Agent 工作状态（工作/思考/庆祝/翻车）。适合已经用 HanaAgent 的人。
+- `小蕾米桌宠-便携版-v0.2.0.zip`：**独立桌宠便携版**，不依赖 Hana，解压双击 exe 即用，
+  纯待机无状态联动。适合不用 Hana、只想要个桌宠陪着的人。
 
 ## 架构
 
@@ -43,6 +47,7 @@ Hana 事件总线 ──> index.js（事件归约）──> bus handler ──> 
 - 事件映射：工具执行 → 工作中；思考/回复 → 思考中；出错 → 翻车；
   工具完成（2s 确认，10s 冷却）→ 庆祝；15s 无事件看门狗 → 回待机
 - 无 Hana 环境时桌宠纯待机，其余功能（拖拽/缩放/画画/右键/托盘）不受影响
+- 全屏自动让路（v0.2.0）：切到全屏应用即时沉底，退出全屏恢复，不抢焦点
 
 ## 目录
 
