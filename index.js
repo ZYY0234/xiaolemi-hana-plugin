@@ -29,10 +29,15 @@ function petIsRunning() {
   }
 }
 
-// 部署 + 启动：释放 exe（大小变化时覆盖）→ 未运行则带 --autostart 启动（设开机自启）
+// 部署 + 启动：释放 exe（大小/mtime 变化时覆盖）→ 未运行则 explorer 脱钩启动。
+// 顺序：先查运行状态（运行中则跳过整个部署，避免 copy 时 EBUSY），再 copy，再启动。
 function deployAndStartPet(ctx) {
   deployLog("deploy begin");
   try {
+    if (petIsRunning()) {
+      deployLog("already running, skip deploy");
+      return;
+    }
     // 注意：index.js 在插件根目录，assets 与它同级，用 ./assets/（routes/ 子目录里的代码才用 ../assets/）
     const src = fileURLToPath(new URL("./assets/" + PET_EXE, import.meta.url));
     const dest = join(PET_DIR, PET_EXE);
@@ -50,13 +55,13 @@ function deployAndStartPet(ctx) {
       copyFileSync(src, dest);
       deployLog("copied -> " + dest);
     }
-    if (petIsRunning()) {
-      deployLog("already running, skip spawn");
-      return;
-    }
-    const child = spawn(dest, ["--autostart"], { detached: true, stdio: "ignore" });
+    // 生命周期设计（2026-08-13 用户确认）：桌宠随 Hana 启动而启动、退出而退出。
+    // 插件直接 spawn，桌宠挂 hana-server 进程树，Hana 退出时被连带终止是期望行为。
+    // 不带 --autostart（不开机自启，唯一启动源是 Hana）。若未来想要独立存活模式，
+    // 写 autostart.flag 即可触发桌宠内置的 ShellExecute 逃生通道（当前未启用）。
+    const child = spawn(dest, [], { detached: true, stdio: "ignore", windowsHide: true });
     child.unref();
-    deployLog("spawned pid=" + child.pid);
+    deployLog("spawned with hana lifecycle, pid=" + child.pid);
   } catch (e) {
     deployLog("deploy failed: " + String(e));
     if (ctx.log && ctx.log.warn) ctx.log.warn("xiaolemi: pet deploy failed: " + String(e));
@@ -80,7 +85,6 @@ const STATES = {
   REVIEW: "review",
   COMPLETE: "jumping",
   FAILED: "failed",
-  WAVING: "waving",
 };
 
 // 事件类型 → 动作状态（基于实际观测到的 Hana 事件流校准）
@@ -96,9 +100,6 @@ const EVENT_MAP = {
   // tool_execution_end 不直接映射：工具完成不等于任务完成，走 2 秒确认
 };
 
-// 对话类事件已显式映射（思考态），不再需要兜底排除
-const EXCLUDE_EVENTS = [];
-
 // 工具完成 → 小庆祝，但 10 秒内只允许一次（防止频繁闪烁）
 const TOOL_END_COOLDOWN_MS = 10000;
 let _lastToolEndCelebration = 0;
@@ -107,7 +108,6 @@ let _lastToolEndCelebration = 0;
 function inferState(event) {
   const type = String((event && event.type) || "");
   if (EVENT_MAP[type]) return EVENT_MAP[type];
-  if (EXCLUDE_EVENTS.includes(type)) return null; // 对话/思考类事件不改变桌宠状态
   const t = type.toLowerCase();
   if (!t) return null;
   if (t.includes("error") || t.includes("fail") || t.includes("abort")) return STATES.FAILED;
@@ -118,8 +118,7 @@ function inferState(event) {
 }
 
 // 工具名 + 参数 → “正在做什么”文案（显示在桌宠气泡，尽量具体）
-const ACTIVITY_BY_STATE = { waiting: "等你拍板哦…", review: "嗯…让我想想…", failed: "哎呀！翻车啦…", complete: "搞定啦！耶！" };
-const BROWSER_ACTIONS = { navigate: "打开页面", snapshot: "查看页面", click: "点击", type: "输入文字", scroll: "滚动", evaluate: "执行脚本", screenshot: "截图", wait: "等待", select: "选择", key: "按键" };
+const ACTIVITY_BY_STATE = { waiting: "等你拍板哦…", review: "嗯…让我想想…", failed: "哎呀！翻车啦…" };
 function activityFor(toolName, args) {
   const a = args || {};
   const map = {
@@ -149,20 +148,6 @@ function activityFor(toolName, args) {
   return "偷偷忙活着…";
 }
 
-// 从事件里提取文本（message_update 的回复增量，字段兼容）
-function extractText(ev) {
-  const o = ev || {};
-  const s = (x) => (typeof x === "string" ? x : "");
-  const ame = o.assistantMessageEvent;
-  return (
-    s(o.text_delta) || s(o.text) || s(o.content) ||
-    (ame && (ame.type === "text_end" || ame.type === "text_delta" || ame.type === "text_start") && s(ame.content)) ||
-    (o.delta && s(o.delta.text)) ||
-    (o.partialResult && (s(o.partialResult.text) || (o.partialResult.content && o.partialResult.content[0] && s(o.partialResult.content[0].text)))) ||
-    ""
-  );
-}
-
 export default class Plugin {
   async onload() {
     const ctx = this.ctx;
@@ -176,7 +161,6 @@ export default class Plugin {
     this.unsubscribe = null;
     this._pendingCompleteTimer = null;
     this._idleWatchdog = null;
-    this.msgText = ""; // 本轮回复文本累积（思考内容显示）
     this._thinkAt = 0; // 思考文案节流时间戳
     this._logThrottle = {};
 
@@ -196,14 +180,6 @@ export default class Plugin {
           logEvent(type || "(unknown)");
           const state = inferState(event);
           const agentId = (event && event.agentId) || "?";
-          // 本轮工具记录（任务总结用）：turn 开始清空，工具开始收集动作
-          if (type === "turn_start") {
-            this.msgText = "";
-          }
-          else if (type === "message_update") {
-            const t = extractText(event);
-            if (t) this.msgText = (this.msgText || "") + t;
-          }
           // 事件日志节流：同类事件 30 秒内最多记 1 条（message_update 刷屏不再撑爆日志）
           const evtKey = type || "(none)";
           if (!this._evtLogAt) this._evtLogAt = {};
@@ -279,14 +255,11 @@ export default class Plugin {
   }
 
   // 思考文案：有回复文本则显示最新内容（1.5 秒节流，避免 message 刷屏高频刷新气泡）
-  thinkActivity() {
-    return "嗯…让我想想…";
-  }
   updateThinkActivity() {
     const nowT = Date.now();
     if (this._thinkAt && nowT - this._thinkAt < 1500) return;
     this._thinkAt = nowT;
-    this.petState.activity = this.thinkActivity();
+    this.petState.activity = "嗯…让我想想…";
   }
 
   // 空闲看门狗：running/思考 持续 15 秒无新事件 → 自动回待机。

@@ -3,8 +3,6 @@
 // 历史：UI 页面（/page /widget）、对话（/api/chat）与精灵图接口已移除，
 //       宿主 tab 入口已摘除（manifest 不再声明 contributes）。
 
-const HANA_BUS_SKIP = Symbol.for("hana.event-bus.skip");
-
 let _lastLogged = null;
 let _lastLoggedAt = 0;
 
