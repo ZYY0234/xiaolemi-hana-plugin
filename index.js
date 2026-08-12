@@ -29,7 +29,7 @@ function petIsRunning() {
   }
 }
 
-// 部署 + 启动：释放 exe（大小/mtime 变化时覆盖）→ 未运行则 explorer 脱钩启动。
+// 部署 + 启动：释放 exe（大小/mtime 变化时覆盖）→ 未运行则直接启动。
 // 顺序：先查运行状态（运行中则跳过整个部署，避免 copy 时 EBUSY），再 copy，再启动。
 function deployAndStartPet(ctx) {
   deployLog("deploy begin");
@@ -57,8 +57,7 @@ function deployAndStartPet(ctx) {
     }
     // 生命周期设计（2026-08-13 用户确认）：桌宠随 Hana 启动而启动、退出而退出。
     // 插件直接 spawn，桌宠挂 hana-server 进程树，Hana 退出时被连带终止是期望行为。
-    // 不带 --autostart（不开机自启，唯一启动源是 Hana）。若未来想要独立存活模式，
-    // 写 autostart.flag 即可触发桌宠内置的 ShellExecute 逃生通道（当前未启用）。
+    // 不带 --autostart（不开机自启，唯一启动源是 Hana）。
     const child = spawn(dest, [], { detached: true, stdio: "ignore", windowsHide: true });
     child.unref();
     deployLog("spawned with hana lifecycle, pid=" + child.pid);
