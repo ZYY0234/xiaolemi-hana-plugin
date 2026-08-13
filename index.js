@@ -84,8 +84,8 @@ function deployAndStartPet(ctx) {
 const HANA_BUS_SKIP = Symbol.for("hana.event-bus.skip");
 
 // 调试日志（文件）：记录每个事件与状态变化，便于定位“幽灵工作状态”
-// 默认关闭；设 XIAOLEMI_STATE_LOG 环境变量为日志路径时开启（如指向 .hanako/logs 下）
-const LOG_FILE = process.env.XIAOLEMI_STATE_LOG || "";
+// 默认写 .hanako/logs/xiaolemi-state.log（开启事件流排查）；可用 XIAOLEMI_STATE_LOG 覆盖路径
+const LOG_FILE = process.env.XIAOLEMI_STATE_LOG || join(os.homedir(), ".hanako", "logs", "xiaolemi-state.log");
 function logLine(s) {
   if (!LOG_FILE) return;
   try { fs.appendFileSync(LOG_FILE, new Date().toISOString() + " " + s + "\n"); } catch (e) { /* noop */ }
