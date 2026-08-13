@@ -262,17 +262,23 @@ export default class Plugin {
               }
             } else {
               clearTimeout(this._pendingCompleteTimer);
-              this.petState.current = state;
-              this.petState.since = Date.now();
-              logLine("SET " + state + " (cancel pending confirm)");
-              if (state === STATES.RUNNING) {
-                this.petState.activity = activityFor(event.toolName, event.args);
-                this.armIdleWatchdog();
-              } else if (state === STATES.REVIEW) {
-                this.updateThinkActivity();
-                this.armIdleWatchdog();
+              // 翻车后模型继续推理/输出（REVIEW）时保持翻车动作，回合结束由 turn_end 保持 3s 回落；
+              // 新的工作（RUNNING）或等待（WAITING）正常覆盖
+              if (this.petState.current === STATES.FAILED && state === STATES.REVIEW) {
+                logLine("SET " + state + " -> keep FAILED");
               } else {
-                this.petState.activity = ACTIVITY_BY_STATE[state] || null;
+                this.petState.current = state;
+                this.petState.since = Date.now();
+                logLine("SET " + state + " (cancel pending confirm)");
+                if (state === STATES.RUNNING) {
+                  this.petState.activity = activityFor(event.toolName, event.args);
+                  this.armIdleWatchdog();
+                } else if (state === STATES.REVIEW) {
+                  this.updateThinkActivity();
+                  this.armIdleWatchdog();
+                } else {
+                  this.petState.activity = ACTIVITY_BY_STATE[state] || null;
+                }
               }
             }
           }
