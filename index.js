@@ -115,6 +115,10 @@ const EVENT_MAP = {
 
 // 工具完成 → 小庆祝，但 10 秒内只允许一次（防止频繁闪烁）
 const TOOL_END_COOLDOWN_MS = 10000;
+// turn_end 时“工具完成距今”的判定窗口：agent 回合最后的输出阶段可能很长（>10s，
+// thinking 持续生成 message_update），10s 窗口会让庆祝判定过期失效。
+// 60s 内有过工具完成且无错误，都算“本轮完成了任务”（2026-08-13 实测发现）
+const TOOL_END_WINDOW_MS = 60000;
 let _lastToolEndCelebration = 0;
 
 // 关键词兜底（尚未观测到的事件名，先按语义猜）
@@ -246,7 +250,7 @@ export default class Plugin {
                 this.scheduleIdleFallback();
               } else if (
                 this._lastToolEndAt &&
-                now - this._lastToolEndAt <= TOOL_END_COOLDOWN_MS &&
+                now - this._lastToolEndAt <= TOOL_END_WINDOW_MS &&
                 now - _lastToolEndCelebration >= TOOL_END_COOLDOWN_MS
               ) {
                 _lastToolEndCelebration = now;
