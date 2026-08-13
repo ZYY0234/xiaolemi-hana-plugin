@@ -1,7 +1,7 @@
 // 小蕾米桌宠 - lifecycle 入口
 // 职责：订阅宿主 EventBus，把 Agent 会话事件归约为桌宠动作状态；
 // 通过 bus handler "remielle-xiaolemi:state" 向 routes 提供当前状态。
-// 附带职责：自动部署并启动桌宠本体（assets/xiaolemi-pet.exe），设开机自启。
+// 附带职责：自动部署并启动桌宠本体（assets/xiaolemi-pet.exe）。不设开机自启（自启可由桌宠托盘手动勾选）。
 import fs from "fs";
 import { spawn, execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, statSync } from "node:fs";
@@ -52,8 +52,22 @@ function deployAndStartPet(ctx) {
     }
     deployLog("src=" + src + " needCopy=" + needCopy);
     if (needCopy) {
-      copyFileSync(src, dest);
-      deployLog("copied -> " + dest);
+      // EBUSY 退避重试：目标被运行中进程锁住时（检测与 copy 之间的竞态窗口）等 500ms 再试，最多 3 次
+      let copied = false;
+      for (let i = 0; i < 3 && !copied; i++) {
+        try {
+          copyFileSync(src, dest);
+          copied = true;
+        } catch (e) {
+          deployLog("copy attempt " + (i + 1) + " failed: " + String(e));
+          if (i < 2) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 500);
+        }
+      }
+      if (copied) {
+        deployLog("copied -> " + dest);
+      } else {
+        throw new Error("copy failed after 3 attempts (EBUSY?)");
+      }
     }
     // 生命周期设计（2026-08-13 用户确认）：桌宠随 Hana 启动而启动、退出而退出。
     // 插件直接 spawn，桌宠挂 hana-server 进程树，Hana 退出时被连带终止是期望行为。
@@ -160,6 +174,7 @@ export default class Plugin {
     this.unsubscribe = null;
     this._pendingCompleteTimer = null;
     this._idleWatchdog = null;
+    this._lastToolEndAt = 0; // 最近一次工具完成时间（turn_end 庆祝判定用）
     this._thinkAt = 0; // 思考文案节流时间戳
     this._logThrottle = {};
 
@@ -193,10 +208,16 @@ export default class Plugin {
             // 工具执行报错 → 失败动作（优先级最高）
             if (event && event.isError) {
               clearTimeout(this._pendingCompleteTimer);
+              this._lastToolEndAt = 0; // 本轮有错，不庆祝
               this.petState.current = STATES.FAILED;
+              this.petState.since = Date.now();
+              this.petState.activity = ACTIVITY_BY_STATE[STATES.FAILED];
+              logLine("ERROR -> FAILED (with activity + watchdog)");
+              this.armIdleWatchdog();
             } else if (type === "tool_execution_end") {
-              // 工具完成：延迟 2 秒确认（期间无新工作事件才算任务完成），
-              // 避免密集工具流导致“一直工作中”
+              // 工具完成：记下完成时间；延迟 2 秒确认（期间无新事件才算任务完成），
+              // 作为 turn_end 缺失/延迟时的兜底庆祝；正常事件流由 turn_end 分支统一判定
+              this._lastToolEndAt = Date.now();
               clearTimeout(this._pendingCompleteTimer);
               logLine("END -> debounce 2s");
               this._pendingCompleteTimer = setTimeout(() => {
@@ -213,23 +234,42 @@ export default class Plugin {
                   logLine("CONFIRM -> IDLE (cooldown)");
                 }
               }, 2000);
+            } else if (type === "turn_end") {
+              // 整轮结束：若 10 秒内有工具完成且无错误 → 庆祝（任务完成），否则回待机。
+              // 修复（2026-08-13 审查）：旧实现 turn_end 走 else 会清掉 pending 确认，
+              // 庆祝几乎永不触发；现在 turn_end 显式判定
+              clearTimeout(this._pendingCompleteTimer);
+              const now = Date.now();
+              if (
+                this._lastToolEndAt &&
+                now - this._lastToolEndAt <= TOOL_END_COOLDOWN_MS &&
+                now - _lastToolEndCelebration >= TOOL_END_COOLDOWN_MS
+              ) {
+                _lastToolEndCelebration = now;
+                this.petState.current = STATES.COMPLETE;
+                this.petState.activity = "搞定！";
+                logLine("TURN_END -> COMPLETE (celebrate)");
+                this.scheduleIdleFallback();
+              } else {
+                this.petState.current = STATES.IDLE;
+                this.petState.activity = null;
+                this.petState.since = Date.now();
+                logLine("TURN_END -> IDLE");
+              }
             } else {
               clearTimeout(this._pendingCompleteTimer);
               this.petState.current = state;
               this.petState.since = Date.now();
               logLine("SET " + state + " (cancel pending confirm)");
-                if (state === STATES.RUNNING) {
-                  this.petState.activity = activityFor(event.toolName, event.args);
-                  this.armIdleWatchdog();
-                } else if (state === STATES.REVIEW) {
-                  this.updateThinkActivity();
-                  this.armIdleWatchdog();
-                } else {
-                  this.petState.activity = ACTIVITY_BY_STATE[state] || null;
-                }
-                if (this.petState.current === STATES.COMPLETE) {
-                  this.scheduleIdleFallback();
-                }
+              if (state === STATES.RUNNING) {
+                this.petState.activity = activityFor(event.toolName, event.args);
+                this.armIdleWatchdog();
+              } else if (state === STATES.REVIEW) {
+                this.updateThinkActivity();
+                this.armIdleWatchdog();
+              } else {
+                this.petState.activity = ACTIVITY_BY_STATE[state] || null;
+              }
             }
           }
           this.petState.seen = [...(this.petState.seen || []), type].slice(-12);
@@ -253,7 +293,7 @@ export default class Plugin {
     deployAndStartPet(ctx);
   }
 
-  // 思考文案：有回复文本则显示最新内容（1.5 秒节流，避免 message 刷屏高频刷新气泡）
+  // 思考文案：固定文案"嗯…让我想想…"（1.5 秒节流，避免 message 刷屏高频刷新气泡）
   updateThinkActivity() {
     const nowT = Date.now();
     if (this._thinkAt && nowT - this._thinkAt < 1500) return;
@@ -267,7 +307,7 @@ export default class Plugin {
   armIdleWatchdog(ms) {
     clearTimeout(this._idleWatchdog);
     this._idleWatchdog = setTimeout(() => {
-      if (this.petState.current === STATES.RUNNING || this.petState.current === STATES.REVIEW) {
+      if (this.petState.current === STATES.RUNNING || this.petState.current === STATES.REVIEW || this.petState.current === STATES.FAILED) {
         this.petState.current = STATES.IDLE;
         this.petState.since = Date.now();
         this.petState.activity = null;
