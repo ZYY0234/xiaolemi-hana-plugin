@@ -239,7 +239,7 @@ export default class Plugin {
                 }
               }, 2000);
             } else if (type === "turn_end") {
-              // 整轮结束：若 10 秒内有工具完成且无错误 → 庆祝（任务完成），否则回待机。
+              // 整轮结束：若 60 秒内有工具完成且无错误 → 庆祝（任务完成），否则回待机。
               // 修复（2026-08-13 审查）：旧实现 turn_end 走 else 会清掉 pending 确认，
               // 庆祝几乎永不触发；现在 turn_end 显式判定
               clearTimeout(this._pendingCompleteTimer);
@@ -269,11 +269,17 @@ export default class Plugin {
               // 翻车后模型继续推理/输出（REVIEW）时保持翻车动作，回合结束由 turn_end 保持 3s 回落；
               // 新的工作（RUNNING）或等待（WAITING）正常覆盖
               if (this.petState.current === STATES.FAILED && state === STATES.REVIEW) {
-                logLine("SET " + state + " -> keep FAILED");
+                const k = "keep_failed";
+                if (!this._evtLogAt[k] || Date.now() - this._evtLogAt[k] >= 30000) {
+                  this._evtLogAt[k] = Date.now();
+                  logLine("SET " + state + " -> keep FAILED");
+                }
               } else {
+                const changed = state !== this.petState.current;
                 this.petState.current = state;
                 this.petState.since = Date.now();
-                logLine("SET " + state + " (cancel pending confirm)");
+                // 状态没变（如 message_update 持续 REVIEW）不刷日志，避免高频刷屏撑爆日志（2026-08-13 审查）
+                if (changed) logLine("SET " + state + " (cancel pending confirm)");
                 if (state === STATES.RUNNING) {
                   this.petState.activity = activityFor(event.toolName, event.args);
                   this.armIdleWatchdog();
