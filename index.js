@@ -301,7 +301,7 @@ export default class Plugin {
     this.petState.activity = "嗯…让我想想…";
   }
 
-  // 空闲看门狗：running/思考 持续 15 秒无新事件 → 自动回待机。
+  // 空闲看门狗：running/思考/failed 持续 15 秒无新事件 → 自动回待机。
   // 兜底场景：tool_execution_end 事件缺失/延迟（turn 结束才 flush）、
   // 或 turn_end 缺失时，桌宠不会一直停在某个状态。新事件会重置看门狗。
   armIdleWatchdog(ms) {
