@@ -57,7 +57,7 @@ function deployAndStartPet(ctx) {
     }
     // 生命周期设计（2026-08-13 用户确认）：桌宠随 Hana 启动而启动、退出而退出。
     // 插件直接 spawn，桌宠挂 hana-server 进程树，Hana 退出时被连带终止是期望行为。
-    // 不带 --autostart（不开机自启，唯一启动源是 Hana）。
+    // 不带 --autostart（插件不设自启，桌宠自启功能仍可由托盘手动勾选）。
     const child = spawn(dest, [], { detached: true, stdio: "ignore", windowsHide: true });
     child.unref();
     deployLog("spawned with hana lifecycle, pid=" + child.pid);
