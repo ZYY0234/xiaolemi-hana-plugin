@@ -240,7 +240,11 @@ export default class Plugin {
               // 庆祝几乎永不触发；现在 turn_end 显式判定
               clearTimeout(this._pendingCompleteTimer);
               const now = Date.now();
-              if (
+              if (this.petState.current === STATES.FAILED) {
+                // 本轮翻车过：保持 failed 3 秒再回落（否则 turn_end 立即覆盖成 idle，翻车动作看不见）
+                logLine("TURN_END -> keep FAILED (fallback 3s)");
+                this.scheduleIdleFallback();
+              } else if (
                 this._lastToolEndAt &&
                 now - this._lastToolEndAt <= TOOL_END_COOLDOWN_MS &&
                 now - _lastToolEndCelebration >= TOOL_END_COOLDOWN_MS
@@ -316,11 +320,11 @@ export default class Plugin {
     }, ms || 15000);
   }
 
-  // 一次性庆祝后 3 秒回落待机（同时清掉“任务完成”活动文案，否则气泡会一直挂着）
+  // 一次性庆祝/翻车后 3 秒回落待机（同时清掉活动文案，否则气泡会一直挂着）
   scheduleIdleFallback() {
     clearTimeout(this._completeTimer);
     this._completeTimer = setTimeout(() => {
-      if (this.petState.current === STATES.COMPLETE) {
+      if (this.petState.current === STATES.COMPLETE || this.petState.current === STATES.FAILED) {
         this.petState.current = STATES.IDLE;
         this.petState.activity = null;
       }
